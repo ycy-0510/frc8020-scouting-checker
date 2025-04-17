@@ -50,7 +50,7 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
     tba_api_key = st.secrets["tba"]["API"]
 
     # Construct the API URL
-    api_url = f"https://www.thebluealliance.com/api/v3/event/2025casd/matches"
+    api_url = f"https://www.thebluealliance.com/api/v3/event/2025mil/matches"
     headers = {"X-TBA-Auth-Key": tba_api_key}
 
     # get match results from TBA
@@ -95,7 +95,7 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
                     f"RP: {matchResult['score_breakdown']['red']['rp']}(+{1 if matchResult['score_breakdown']['red']['autoBonusAchieved'] else 0}+{1 if matchResult['score_breakdown']['red']['coralBonusAchieved'] else 0}+{1 if matchResult['score_breakdown']['red']['bargeBonusAchieved'] else 0})"
                 )
                 st.sidebar.markdown(
-                    f"Panalty: {matchResult['score_breakdown']['red']['techFoulCount']}/{matchResult['score_breakdown']['red']['foulCount']}"
+                    f"Penalty: {matchResult['score_breakdown']['red']['techFoulCount']}/{matchResult['score_breakdown']['red']['foulCount']}"
                 )
                 st.sidebar.markdown(
                     "Coopertition"
@@ -132,7 +132,7 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
             scouterNameList.append("")
         if selectMatch:
             match = matches[selectMatch - 1]
-            ref = db.collection("matches").document("8020").collection("2025_San_Diego")
+            ref = db.collection("matches").document("8020").collection("2025_Milstein_Division")
             status = {}  # {'0000:true,9999:false},...
             for team in match["alliances"]["blue"]["team_keys"]:
                 teamNumber = team.replace("frc", "")
@@ -167,7 +167,7 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
                 ref = (
                     db.collection("matches")
                     .document("8020")
-                    .collection("2025_San_Diego")
+                    .collection("2025_Milstein_Division")
                 )
                 status = {}  # {'0000:true,9999:false},...
                 for team in match["alliances"]["blue"]["team_keys"]:
