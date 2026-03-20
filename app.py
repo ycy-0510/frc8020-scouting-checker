@@ -32,6 +32,28 @@ class CommentData:
         self.matchNumber = matchNumber
 
 
+def check_valid_score(doc):
+    if not doc.exists:
+        return False
+    data = doc.to_dict() or {}
+    try:
+        auto = data.get("auto", {})
+        if bool(auto.get("score")) != (auto.get("fuels", 0) >= 5): return False
+        
+        teleop = data.get("teleop", {})
+        if bool(teleop.get("scoreT")) != (teleop.get("transitionfuels", 0) >= 5): return False
+        
+        for f, s in zip(teleop.get("shiftsfuels", []), teleop.get("score", [])):
+            if bool(s) != (f >= 5): return False
+            
+        endgame = data.get("endgame", {})
+        if bool(endgame.get("score")) != (endgame.get("endfuels", 0) >= 5): return False
+        
+        return True
+    except Exception:
+        return False
+
+
 if not firebase_admin._apps:
     firebase_json = st.secrets["firebase"]["json_credentials"]
     # Parse the JSON string into a Python dictionary
@@ -50,7 +72,7 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
     tba_api_key = st.secrets["tba"]["API"]
 
     # Construct the API URL
-    api_url = f"https://www.thebluealliance.com/api/v3/event/2025mil/matches"
+    api_url = f"https://www.thebluealliance.com/api/v3/event/2026ilpe/matches"
     headers = {"X-TBA-Auth-Key": tba_api_key}
 
     # get match results from TBA
@@ -82,25 +104,20 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
                     f"Total Points: {matchResult['score_breakdown']['blue']['totalPoints']}"
                 )
                 st.sidebar.markdown(
-                    f"RP: {matchResult['score_breakdown']['blue']['rp']}(+{1 if matchResult['score_breakdown']['blue']['autoBonusAchieved'] else 0}+{1 if matchResult['score_breakdown']['blue']['coralBonusAchieved'] else 0}+{1 if matchResult['score_breakdown']['blue']['bargeBonusAchieved'] else 0})"
+                    f"RP: {matchResult['score_breakdown']['blue']['rp']}(+{1 if matchResult['score_breakdown']['blue']['energizedAchieved'] else 0}+{1 if matchResult['score_breakdown']['blue']['superchargedAchieved'] else 0}+{1 if matchResult['score_breakdown']['blue']['traversalAchieved'] else 0})"
                 )
                 st.sidebar.markdown(
-                    f"Panalty: {matchResult['score_breakdown']['blue']['techFoulCount']}/{matchResult['score_breakdown']['blue']['foulCount']}"
+                    f"Panalty: {matchResult['score_breakdown']['blue']['majorFoulCount']}/{matchResult['score_breakdown']['blue']['minorFoulCount']}"
                 )
                 st.sidebar.markdown(f"Red Alliance:")
                 st.sidebar.markdown(
                     f"Total Points: {matchResult['score_breakdown']['red']['totalPoints']}"
                 )
                 st.sidebar.markdown(
-                    f"RP: {matchResult['score_breakdown']['red']['rp']}(+{1 if matchResult['score_breakdown']['red']['autoBonusAchieved'] else 0}+{1 if matchResult['score_breakdown']['red']['coralBonusAchieved'] else 0}+{1 if matchResult['score_breakdown']['red']['bargeBonusAchieved'] else 0})"
+                    f"RP: {matchResult['score_breakdown']['red']['rp']}(+{1 if matchResult['score_breakdown']['red']['energizedAchieved'] else 0}+{1 if matchResult['score_breakdown']['red']['superchargedAchieved'] else 0}+{1 if matchResult['score_breakdown']['red']['traversalAchieved'] else 0})"
                 )
                 st.sidebar.markdown(
-                    f"Penalty: {matchResult['score_breakdown']['red']['techFoulCount']}/{matchResult['score_breakdown']['red']['foulCount']}"
-                )
-                st.sidebar.markdown(
-                    "Coopertition"
-                    if matchResult["score_breakdown"]["blue"]["coopertitionCriteriaMet"]
-                    else ""
+                    f"Penalty: {matchResult['score_breakdown']['red']['majorFoulCount']}/{matchResult['score_breakdown']['red']['minorFoulCount']}"
                 )
                 # score_breakdown/videos
             if len(matchResult["videos"]) > 0:
@@ -121,85 +138,72 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
     matches = response.json()
     # sort match by mac number
     matches.sort(key=lambda x: x["match_number"])
-    single, all = st.tabs(["Single Match", "All Matches"])
-    with single:
-        # Parse the response and extract the relevant information
-        matchNumbers = [match["match_number"] for match in matches]
-        selectMatch = st.selectbox("Select Match Number: ", matchNumbers)
-        scouterNames = st.text_input("Enter Scouter Name: ")
-        scouterNameList = scouterNames.split()
-        while len(scouterNameList) < 6:
-            scouterNameList.append("")
-        if selectMatch:
-            match = matches[selectMatch - 1]
-            ref = db.collection("matches").document("8020").collection("2025_Milstein_Division")
-            status = {}  # {'0000:true,9999:false},...
-            for team in match["alliances"]["blue"]["team_keys"]:
-                teamNumber = team.replace("frc", "")
-                # check Qualifications_{match_number}_{teamNumber} exists
-                status[team] = (
-                    ref.document(f"Qualifications_{selectMatch}_{teamNumber}")
-                    .get()
-                    .exists
-                )
-            for team in match["alliances"]["red"]["team_keys"]:
-                teamNumber = team.replace("frc", "")
-                # check Qualifications_{match_number}_{teamNumber} exists
-                status[team] = (
-                    ref.document(f"Qualifications_{selectMatch}_{teamNumber}")
-                    .get()
-                    .exists
-                )
-            time = datetime.datetime.fromtimestamp(match["time"])
-            st.markdown(f"### Match {match['match_number']} at {time}")
-            st.markdown(
-                f"""
-                        | Blue 1 | Blue 2 | Blue 3 || Red 1 | Red 2 | Red 3 |
-                        | --- | --- | --- | --- | --- | --- | --- |
-                        | {match['alliances']['blue']['team_keys'][0].replace('frc','')} | {match['alliances']['blue']['team_keys'][1].replace('frc','')} | {match['alliances']['blue']['team_keys'][2].replace('frc','')} | | {match['alliances']['red']['team_keys'][0].replace('frc','')} | {match['alliances']['red']['team_keys'][1].replace('frc','')} | {match['alliances']['red']['team_keys'][2].replace('frc','')} |
-                        | {'✅' if status[match['alliances']['blue']['team_keys'][0]] else '❌'}|{'✅' if status[match['alliances']['blue']['team_keys'][1]] else '❌'}|{'✅' if status[match['alliances']['blue']['team_keys'][2]] else '❌'}| |{'✅' if status[match['alliances']['red']['team_keys'][0]] else '❌'}|{'✅' if status[match['alliances']['red']['team_keys'][1]] else '❌'}|{'✅' if status[match['alliances']['red']['team_keys'][2]] else '❌'}|
-                        | {scouterNameList[3]}|{scouterNameList[4]}|{scouterNameList[5]}||{scouterNameList[0]}|{scouterNameList[1]}|{scouterNameList[2]}|
-                        """
-            )
-    with all:
-        if st.button("Show All Matches"):
-            for match in matches:
-                ref = (
-                    db.collection("matches")
-                    .document("8020")
-                    .collection("2025_Milstein_Division")
-                )
-                status = {}  # {'0000:true,9999:false},...
-                for team in match["alliances"]["blue"]["team_keys"]:
-                    teamNumber = team.replace("frc", "")
-                    # check Qualifications_{match_number}_{teamNumber} exists
-                    status[team] = (
-                        ref.document(
-                            f"Qualifications_{match['match_number']}_{teamNumber}"
-                        )
-                        .get()
-                        .exists
-                    )
-                for team in match["alliances"]["red"]["team_keys"]:
-                    teamNumber = team.replace("frc", "")
-                    # check Qualifications_{match_number}_{teamNumber} exists
-                    status[team] = (
-                        ref.document(
-                            f"Qualifications_{match['match_number']}_{teamNumber}"
-                        )
-                        .get()
-                        .exists
-                    )
-                time = datetime.datetime.fromtimestamp(match["time"])
-                st.markdown(f"### Match {match['match_number']} at {time}")
-                st.markdown(
-                    f"""
-                            | Blue 1 | Blue 2 | Blue 3 || Red 1 | Red 2 | Red 3 |
-                            | --- | --- | --- | --- | --- | --- | --- |
-                            | {match['alliances']['blue']['team_keys'][0].replace('frc','')} | {match['alliances']['blue']['team_keys'][1].replace('frc','')} | {match['alliances']['blue']['team_keys'][2].replace('frc','')} | | {match['alliances']['red']['team_keys'][0].replace('frc','')} | {match['alliances']['red']['team_keys'][1].replace('frc','')} | {match['alliances']['red']['team_keys'][2].replace('frc','')} |
-                            | {'✅' if status[match['alliances']['blue']['team_keys'][0]] else '❌'}|{'✅' if status[match['alliances']['blue']['team_keys'][1]] else '❌'}|{'✅' if status[match['alliances']['blue']['team_keys'][2]] else '❌'}| |{'✅' if status[match['alliances']['red']['team_keys'][0]] else '❌'}|{'✅' if status[match['alliances']['red']['team_keys'][1]] else '❌'}|{'✅' if status[match['alliances']['red']['team_keys'][2]] else '❌'}|
-                            """
-                )
+    # Parse the response and extract the relevant information
+    matchNumbers = [match["match_number"] for match in matches]
+    selectMatch = st.slider("Select Match Number: ", min_value=min(matchNumbers), max_value=max(matchNumbers), value=min(matchNumbers))
+    if selectMatch:
+        match = matches[selectMatch - 1]
+        ref = db.collection("matches").document("8020").collection("2026_Central_Illinois")
+        status = {}  # {'0000:true,9999:false},...
+        shift = {}
+        rp_match = {}
+        
+        # get official RP from TBA
+        tba_blue_rp = match.get("score_breakdown", {}).get("blue", {}).get("rp") if match.get("score_breakdown") else None
+        tba_red_rp = match.get("score_breakdown", {}).get("red", {}).get("rp") if match.get("score_breakdown") else None
+
+        for team in match["alliances"]["blue"]["team_keys"]:
+            teamNumber = team.replace("frc", "")
+            # check if score bool matches fuels >= 5
+            doc = ref.document(f"Qualifications_{selectMatch}_{teamNumber}").get()
+            status[team] = check_valid_score(doc)
+            data = doc.to_dict() if doc.exists else None
+            res_data = data.get("result", {}) if data else {}
+            shift[team] = res_data.get("shift1Active")
+            
+            # Check RP
+            scouted_rp = res_data.get("rankingPoints")
+            rp_match[team] = (scouted_rp == tba_blue_rp) if tba_blue_rp is not None and scouted_rp is not None else None
+
+        for team in match["alliances"]["red"]["team_keys"]:
+            teamNumber = team.replace("frc", "")
+            # check if score bool matches fuels >= 5
+            doc = ref.document(f"Qualifications_{selectMatch}_{teamNumber}").get()
+            status[team] = check_valid_score(doc)
+            data = doc.to_dict() if doc.exists else None
+            res_data = data.get("result", {}) if data else {}
+            shift[team] = res_data.get("shift1Active")
+
+            # Check RP
+            scouted_rp = res_data.get("rankingPoints")
+            rp_match[team] = (scouted_rp == tba_red_rp) if tba_red_rp is not None and scouted_rp is not None else None
+            
+        blue_teams = match["alliances"]["blue"]["team_keys"]
+        red_teams = match["alliances"]["red"]["team_keys"]
+        
+        blue_shifts = [shift[t] for t in blue_teams if shift[t] is not None]
+        red_shifts = [shift[t] for t in red_teams if shift[t] is not None]
+        
+        blue_same = (len(set(blue_shifts)) == 1 and len(blue_shifts) == 3)
+        blue_val = blue_shifts[0] if blue_same else None
+        
+        red_same = (len(set(red_shifts)) == 1 and len(red_shifts) == 3)
+        red_val = red_shifts[0] if red_same else None
+        
+        diff_check = (blue_same and red_same and blue_val != red_val)
+        
+        time = datetime.datetime.fromtimestamp(match["time"])
+        st.markdown(f"### Match {match['match_number']} at {time}")
+        st.markdown(
+            f"""
+                    | | Blue 1 | Blue 2 | Blue 3 || Red 1 | Red 2 | Red 3 |
+                    | --- | --- | --- | --- | --- | --- | --- | --- |
+                    | Team| {match['alliances']['blue']['team_keys'][0].replace('frc','')} | {match['alliances']['blue']['team_keys'][1].replace('frc','')} | {match['alliances']['blue']['team_keys'][2].replace('frc','')} | | {match['alliances']['red']['team_keys'][0].replace('frc','')} | {match['alliances']['red']['team_keys'][1].replace('frc','')} | {match['alliances']['red']['team_keys'][2].replace('frc','')} |
+                    |Valid    | {'✅' if status[match['alliances']['blue']['team_keys'][0]] else '❌'}|{'✅' if status[match['alliances']['blue']['team_keys'][1]] else '❌'}|{'✅' if status[match['alliances']['blue']['team_keys'][2]] else '❌'}| |{'✅' if status[match['alliances']['red']['team_keys'][0]] else '❌'}|{'✅' if status[match['alliances']['red']['team_keys'][1]] else '❌'}|{'✅' if status[match['alliances']['red']['team_keys'][2]] else '❌'}|
+                    |RP       | {'✅' if rp_match[match['alliances']['blue']['team_keys'][0]] else '❌'}|{'✅' if rp_match[match['alliances']['blue']['team_keys'][1]] else '❌'}|{'✅' if rp_match[match['alliances']['blue']['team_keys'][2]] else '❌'}| |{'✅' if rp_match[match['alliances']['red']['team_keys'][0]] else '❌'}|{'✅' if rp_match[match['alliances']['red']['team_keys'][1]] else '❌'}|{'✅' if rp_match[match['alliances']['red']['team_keys'][2]] else '❌'}|
+                    """
+        )
+        st.markdown(f"**Blue Match:** {'✅' if blue_same else '❌'} | **Red Match:** {'✅' if red_same else '❌'} | **Blue & Red Different:** {'✅' if diff_check else '❌'}")
 
 else:
     st.warning("Invalid User Name or Serial Code")
