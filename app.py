@@ -140,22 +140,30 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
     matches.sort(key=lambda x: x["match_number"])
     # Parse the response and extract the relevant information
     matchNumbers = [match["match_number"] for match in matches]
-    selectMatch = st.slider("Select Match Number: ", min_value=min(matchNumbers), max_value=max(matchNumbers), value=min(matchNumbers))
+    selectMatch = st.selectbox("Select Match Number: ", matchNumbers)
     if selectMatch:
         match = matches[selectMatch - 1]
         ref = db.collection("matches").document("8020").collection("2026_Central_Illinois")
+        submit = {}
         status = {}  # {'0000:true,9999:false},...
         shift = {}
         rp_match = {}
-        
-        # get official RP from TBA
+        score_match = {}
+        blue_teams = match["alliances"]["blue"]["team_keys"]
+        red_teams = match["alliances"]["red"]["team_keys"]
+
+        # get official RP & Score from TBA
         tba_blue_rp = match.get("score_breakdown", {}).get("blue", {}).get("rp") if match.get("score_breakdown") else None
         tba_red_rp = match.get("score_breakdown", {}).get("red", {}).get("rp") if match.get("score_breakdown") else None
 
-        for team in match["alliances"]["blue"]["team_keys"]:
+        tba_blue_score = match.get("score_breakdown", {}).get("blue", {}).get("totalPoints") if match.get("score_breakdown") else None
+        tba_red_score = match.get("score_breakdown", {}).get("red", {}).get("totalPoints") if match.get("score_breakdown") else None
+
+        for team in blue_teams:
             teamNumber = team.replace("frc", "")
             # check if score bool matches fuels >= 5
             doc = ref.document(f"Qualifications_{selectMatch}_{teamNumber}").get()
+            submit[team] = doc.exists
             status[team] = check_valid_score(doc)
             data = doc.to_dict() if doc.exists else None
             res_data = data.get("result", {}) if data else {}
@@ -164,11 +172,16 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
             # Check RP
             scouted_rp = res_data.get("rankingPoints")
             rp_match[team] = (scouted_rp == tba_blue_rp) if tba_blue_rp is not None and scouted_rp is not None else None
+            
+            # Check Score
+            scouted_score = res_data.get("totalScore")
+            score_match[team] = (scouted_score == tba_blue_score) if tba_blue_score is not None and scouted_score is not None else None
 
-        for team in match["alliances"]["red"]["team_keys"]:
+        for team in red_teams:
             teamNumber = team.replace("frc", "")
             # check if score bool matches fuels >= 5
             doc = ref.document(f"Qualifications_{selectMatch}_{teamNumber}").get()
+            submit[team] = doc.exists
             status[team] = check_valid_score(doc)
             data = doc.to_dict() if doc.exists else None
             res_data = data.get("result", {}) if data else {}
@@ -177,9 +190,12 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
             # Check RP
             scouted_rp = res_data.get("rankingPoints")
             rp_match[team] = (scouted_rp == tba_red_rp) if tba_red_rp is not None and scouted_rp is not None else None
+
+            # Check Score
+            scouted_score = res_data.get("totalScore")
+            score_match[team] = (scouted_score == tba_red_score) if tba_red_score is not None and scouted_score is not None else None
             
-        blue_teams = match["alliances"]["blue"]["team_keys"]
-        red_teams = match["alliances"]["red"]["team_keys"]
+        
         
         blue_shifts = [shift[t] for t in blue_teams if shift[t] is not None]
         red_shifts = [shift[t] for t in red_teams if shift[t] is not None]
@@ -198,9 +214,11 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
             f"""
                     | | Blue 1 | Blue 2 | Blue 3 || Red 1 | Red 2 | Red 3 |
                     | --- | --- | --- | --- | --- | --- | --- | --- |
-                    | Team| {match['alliances']['blue']['team_keys'][0].replace('frc','')} | {match['alliances']['blue']['team_keys'][1].replace('frc','')} | {match['alliances']['blue']['team_keys'][2].replace('frc','')} | | {match['alliances']['red']['team_keys'][0].replace('frc','')} | {match['alliances']['red']['team_keys'][1].replace('frc','')} | {match['alliances']['red']['team_keys'][2].replace('frc','')} |
-                    |Valid    | {'✅' if status[match['alliances']['blue']['team_keys'][0]] else '❌'}|{'✅' if status[match['alliances']['blue']['team_keys'][1]] else '❌'}|{'✅' if status[match['alliances']['blue']['team_keys'][2]] else '❌'}| |{'✅' if status[match['alliances']['red']['team_keys'][0]] else '❌'}|{'✅' if status[match['alliances']['red']['team_keys'][1]] else '❌'}|{'✅' if status[match['alliances']['red']['team_keys'][2]] else '❌'}|
-                    |RP       | {'✅' if rp_match[match['alliances']['blue']['team_keys'][0]] else '❌'}|{'✅' if rp_match[match['alliances']['blue']['team_keys'][1]] else '❌'}|{'✅' if rp_match[match['alliances']['blue']['team_keys'][2]] else '❌'}| |{'✅' if rp_match[match['alliances']['red']['team_keys'][0]] else '❌'}|{'✅' if rp_match[match['alliances']['red']['team_keys'][1]] else '❌'}|{'✅' if rp_match[match['alliances']['red']['team_keys'][2]] else '❌'}|
+                    | Team| {blue_teams[0].replace('frc','')} | {blue_teams[1].replace('frc','')} | {blue_teams[2].replace('frc','')} | | {red_teams[0].replace('frc','')} | {red_teams[1].replace('frc','')} | {red_teams[2].replace('frc','')} |
+                    | Submit| {'✅' if submit[blue_teams[0]] else '❌'}|{'✅' if submit[blue_teams[1]] else '❌'}|{'✅' if submit[blue_teams[2]] else '❌'}| |{'✅' if submit[red_teams[0]] else '❌'}|{'✅' if submit[red_teams[1]] else '❌'}|{'✅' if submit[red_teams[2]] else '❌'}|
+                    | Valid | {'✅' if status[blue_teams[0]] else '❌'}|{'✅' if status[blue_teams[1]] else '❌'}|{'✅' if status[blue_teams[2]] else '❌'}| |{'✅' if status[red_teams[0]] else '❌'}|{'✅' if status[red_teams[1]] else '❌'}|{'✅' if status[red_teams[2]] else '❌'}|
+                    | RP    | {'✅' if rp_match[blue_teams[0]] else '❌'}|{'✅' if rp_match[blue_teams[1]] else '❌'}|{'✅' if rp_match[blue_teams[2]] else '❌'}| |{'✅' if rp_match[red_teams[0]] else '❌'}|{'✅' if rp_match[red_teams[1]] else '❌'}|{'✅' if rp_match[red_teams[2]] else '❌'}|
+                    | Score | {'✅' if score_match[blue_teams[0]] else '❌'}|{'✅' if score_match[blue_teams[1]] else '❌'}|{'✅' if score_match[blue_teams[2]] else '❌'}| |{'✅' if score_match[red_teams[0]] else '❌'}|{'✅' if score_match[red_teams[1]] else '❌'}|{'✅' if score_match[red_teams[2]] else '❌'}|
                     """
         )
         st.markdown(f"**Blue Match:** {'✅' if blue_same else '❌'} | **Red Match:** {'✅' if red_same else '❌'} | **Blue & Red Different:** {'✅' if diff_check else '❌'}")
