@@ -132,96 +132,159 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
         # st.sidebar.markdown(matchResult)
 
     ##==================Scouting Checker==================
-    response = requests.get(api_url, headers=headers)
-    response.raise_for_status()  # Raise an exception for bad status codes
+    tab1, tab2 = st.tabs(["Qualification", "Practice"])
 
-    matches = response.json()
-    # sort match by mac number
-    matches.sort(key=lambda x: x["match_number"])
-    # Parse the response and extract the relevant information
-    matchNumbers = [match["match_number"] for match in matches]
-    selectMatch = st.selectbox("Select Match Number: ", matchNumbers)
-    if selectMatch:
-        match = matches[selectMatch - 1]
-        ref = db.collection("matches").document("8020").collection("2026_Midwest")
-        submit = {}
-        status = {}  # {'0000:true,9999:false},...
-        shift = {}
-        rp_match = {}
-        score_match = {}
-        blue_teams = match["alliances"]["blue"]["team_keys"]
-        red_teams = match["alliances"]["red"]["team_keys"]
+    with tab1:
+        response = requests.get(api_url, headers=headers)
+        response.raise_for_status()  # Raise an exception for bad status codes
 
-        # get official RP & Score from TBA
-        tba_blue_rp = match.get("score_breakdown", {}).get("blue", {}).get("rp") if match.get("score_breakdown") else None
-        tba_red_rp = match.get("score_breakdown", {}).get("red", {}).get("rp") if match.get("score_breakdown") else None
+        matches = response.json()
+        # sort match by mac number
+        matches.sort(key=lambda x: x["match_number"])
+        # Parse the response and extract the relevant information
+        matchNumbers = [match["match_number"] for match in matches]
+        selectMatch = st.selectbox("Select Match Number: ", matchNumbers)
+        if selectMatch:
+            match = matches[selectMatch - 1]
+            ref = db.collection("matches").document("8020").collection("2026_Midwest")
+            submit = {}
+            status = {}  # {'0000:true,9999:false},...
+            shift = {}
+            rp_match = {}
+            score_match = {}
+            blue_teams = match["alliances"]["blue"]["team_keys"]
+            red_teams = match["alliances"]["red"]["team_keys"]
 
-        tba_blue_score = match.get("score_breakdown", {}).get("blue", {}).get("totalPoints") if match.get("score_breakdown") else None
-        tba_red_score = match.get("score_breakdown", {}).get("red", {}).get("totalPoints") if match.get("score_breakdown") else None
+            # get official RP & Score from TBA
+            tba_blue_rp = match.get("score_breakdown", {}).get("blue", {}).get("rp") if match.get("score_breakdown") else None
+            tba_red_rp = match.get("score_breakdown", {}).get("red", {}).get("rp") if match.get("score_breakdown") else None
 
-        for team in blue_teams:
-            teamNumber = team.replace("frc", "")
-            # check if score bool matches fuels >= 5
-            doc = ref.document(f"Qualifications_{selectMatch}_{teamNumber}").get()
-            submit[team] = doc.exists
-            status[team] = check_valid_score(doc)
-            data = doc.to_dict() if doc.exists else None
-            res_data = data.get("result", {}) if data else {}
-            shift[team] = res_data.get("shift1Active")
+            tba_blue_score = match.get("score_breakdown", {}).get("blue", {}).get("totalPoints") if match.get("score_breakdown") else None
+            tba_red_score = match.get("score_breakdown", {}).get("red", {}).get("totalPoints") if match.get("score_breakdown") else None
+
+            for team in blue_teams:
+                teamNumber = team.replace("frc", "")
+                # check if score bool matches fuels >= 5
+                doc = ref.document(f"Qualifications_{selectMatch}_{teamNumber}").get()
+                submit[team] = doc.exists
+                status[team] = check_valid_score(doc)
+                data = doc.to_dict() if doc.exists else None
+                res_data = data.get("result", {}) if data else {}
+                shift[team] = res_data.get("shift1Active")
+                
+                # Check RP
+                scouted_rp = res_data.get("rankingPoints")
+                rp_match[team] = (scouted_rp == tba_blue_rp) if tba_blue_rp is not None and scouted_rp is not None else None
+                
+                # Check Score
+                scouted_score = res_data.get("totalScore")
+                score_match[team] = (scouted_score == tba_blue_score) if tba_blue_score is not None and scouted_score is not None else None
+
+            for team in red_teams:
+                teamNumber = team.replace("frc", "")
+                # check if score bool matches fuels >= 5
+                doc = ref.document(f"Qualifications_{selectMatch}_{teamNumber}").get()
+                submit[team] = doc.exists
+                status[team] = check_valid_score(doc)
+                data = doc.to_dict() if doc.exists else None
+                res_data = data.get("result", {}) if data else {}
+                shift[team] = res_data.get("shift1Active")
+
+                # Check RP
+                scouted_rp = res_data.get("rankingPoints")
+                rp_match[team] = (scouted_rp == tba_red_rp) if tba_red_rp is not None and scouted_rp is not None else None
+
+                # Check Score
+                scouted_score = res_data.get("totalScore")
+                score_match[team] = (scouted_score == tba_red_score) if tba_red_score is not None and scouted_score is not None else None
+                
+            blue_shifts = [shift[t] for t in blue_teams if shift[t] is not None]
+            red_shifts = [shift[t] for t in red_teams if shift[t] is not None]
             
-            # Check RP
-            scouted_rp = res_data.get("rankingPoints")
-            rp_match[team] = (scouted_rp == tba_blue_rp) if tba_blue_rp is not None and scouted_rp is not None else None
+            blue_same = (len(set(blue_shifts)) == 1 and len(blue_shifts) == 3)
+            blue_val = blue_shifts[0] if blue_same else None
             
-            # Check Score
-            scouted_score = res_data.get("totalScore")
-            score_match[team] = (scouted_score == tba_blue_score) if tba_blue_score is not None and scouted_score is not None else None
-
-        for team in red_teams:
-            teamNumber = team.replace("frc", "")
-            # check if score bool matches fuels >= 5
-            doc = ref.document(f"Qualifications_{selectMatch}_{teamNumber}").get()
-            submit[team] = doc.exists
-            status[team] = check_valid_score(doc)
-            data = doc.to_dict() if doc.exists else None
-            res_data = data.get("result", {}) if data else {}
-            shift[team] = res_data.get("shift1Active")
-
-            # Check RP
-            scouted_rp = res_data.get("rankingPoints")
-            rp_match[team] = (scouted_rp == tba_red_rp) if tba_red_rp is not None and scouted_rp is not None else None
-
-            # Check Score
-            scouted_score = res_data.get("totalScore")
-            score_match[team] = (scouted_score == tba_red_score) if tba_red_score is not None and scouted_score is not None else None
+            red_same = (len(set(red_shifts)) == 1 and len(red_shifts) == 3)
+            red_val = red_shifts[0] if red_same else None
             
+            diff_check = (blue_same and red_same and blue_val != red_val)
+            
+            time = datetime.datetime.fromtimestamp(match["time"])
+            st.markdown(f"### Match {match['match_number']} at {time}")
+            st.markdown(
+                f"""
+                        | | Blue 1 | Blue 2 | Blue 3 || Red 1 | Red 2 | Red 3 |
+                        | --- | --- | --- | --- | --- | --- | --- | --- |
+                        | Team| {blue_teams[0].replace('frc','')} | {blue_teams[1].replace('frc','')} | {blue_teams[2].replace('frc','')} | | {red_teams[0].replace('frc','')} | {red_teams[1].replace('frc','')} | {red_teams[2].replace('frc','')} |
+                        | Submit| {'✅' if submit[blue_teams[0]] else '❌'}|{'✅' if submit[blue_teams[1]] else '❌'}|{'✅' if submit[blue_teams[2]] else '❌'}| |{'✅' if submit[red_teams[0]] else '❌'}|{'✅' if submit[red_teams[1]] else '❌'}|{'✅' if submit[red_teams[2]] else '❌'}|
+                        | Valid | {'✅' if status[blue_teams[0]] else '❌'}|{'✅' if status[blue_teams[1]] else '❌'}|{'✅' if status[blue_teams[2]] else '❌'}| |{'✅' if status[red_teams[0]] else '❌'}|{'✅' if status[red_teams[1]] else '❌'}|{'✅' if status[red_teams[2]] else '❌'}|
+                        | RP    | {'✅' if rp_match[blue_teams[0]] else '❌'}|{'✅' if rp_match[blue_teams[1]] else '❌'}|{'✅' if rp_match[blue_teams[2]] else '❌'}| |{'✅' if rp_match[red_teams[0]] else '❌'}|{'✅' if rp_match[red_teams[1]] else '❌'}|{'✅' if rp_match[red_teams[2]] else '❌'}|
+                        | Score | {'✅' if score_match[blue_teams[0]] else '❌'}|{'✅' if score_match[blue_teams[1]] else '❌'}|{'✅' if score_match[blue_teams[2]] else '❌'}| |{'✅' if score_match[red_teams[0]] else '❌'}|{'✅' if score_match[red_teams[1]] else '❌'}|{'✅' if score_match[red_teams[2]] else '❌'}|
+                        """
+            )
+            st.markdown(f"**Blue Match:** {'✅' if blue_same else '❌'} | **Red Match:** {'✅' if red_same else '❌'} | **Blue & Red Different:** {'✅' if diff_check else '❌'}")
+
+    with tab2:
+        practiceMatch = st.number_input("Practice Match Number: ", min_value=1, step=1)
+        col1, col2 = st.columns(2)
+        blue_practice_teams = []
+        red_practice_teams = []
+        with col1:
+            st.markdown("### Blue Alliance")
+            for i in range(3):
+                team = st.text_input(f"Blue {i+1} Team Number: ", key=f"blue_practice_{i}")
+                if team: blue_practice_teams.append(team)
+        with col2:
+            st.markdown("### Red Alliance")
+            for i in range(3):
+                team = st.text_input(f"Red {i+1} Team Number: ", key=f"red_practice_{i}")
+                if team: red_practice_teams.append(team)
         
-        
-        blue_shifts = [shift[t] for t in blue_teams if shift[t] is not None]
-        red_shifts = [shift[t] for t in red_teams if shift[t] is not None]
-        
-        blue_same = (len(set(blue_shifts)) == 1 and len(blue_shifts) == 3)
-        blue_val = blue_shifts[0] if blue_same else None
-        
-        red_same = (len(set(red_shifts)) == 1 and len(red_shifts) == 3)
-        red_val = red_shifts[0] if red_same else None
-        
-        diff_check = (blue_same and red_same and blue_val != red_val)
-        
-        time = datetime.datetime.fromtimestamp(match["time"])
-        st.markdown(f"### Match {match['match_number']} at {time}")
-        st.markdown(
-            f"""
-                    | | Blue 1 | Blue 2 | Blue 3 || Red 1 | Red 2 | Red 3 |
-                    | --- | --- | --- | --- | --- | --- | --- | --- |
-                    | Team| {blue_teams[0].replace('frc','')} | {blue_teams[1].replace('frc','')} | {blue_teams[2].replace('frc','')} | | {red_teams[0].replace('frc','')} | {red_teams[1].replace('frc','')} | {red_teams[2].replace('frc','')} |
-                    | Submit| {'✅' if submit[blue_teams[0]] else '❌'}|{'✅' if submit[blue_teams[1]] else '❌'}|{'✅' if submit[blue_teams[2]] else '❌'}| |{'✅' if submit[red_teams[0]] else '❌'}|{'✅' if submit[red_teams[1]] else '❌'}|{'✅' if submit[red_teams[2]] else '❌'}|
-                    | Valid | {'✅' if status[blue_teams[0]] else '❌'}|{'✅' if status[blue_teams[1]] else '❌'}|{'✅' if status[blue_teams[2]] else '❌'}| |{'✅' if status[red_teams[0]] else '❌'}|{'✅' if status[red_teams[1]] else '❌'}|{'✅' if status[red_teams[2]] else '❌'}|
-                    | RP    | {'✅' if rp_match[blue_teams[0]] else '❌'}|{'✅' if rp_match[blue_teams[1]] else '❌'}|{'✅' if rp_match[blue_teams[2]] else '❌'}| |{'✅' if rp_match[red_teams[0]] else '❌'}|{'✅' if rp_match[red_teams[1]] else '❌'}|{'✅' if rp_match[red_teams[2]] else '❌'}|
-                    | Score | {'✅' if score_match[blue_teams[0]] else '❌'}|{'✅' if score_match[blue_teams[1]] else '❌'}|{'✅' if score_match[blue_teams[2]] else '❌'}| |{'✅' if score_match[red_teams[0]] else '❌'}|{'✅' if score_match[red_teams[1]] else '❌'}|{'✅' if score_match[red_teams[2]] else '❌'}|
-                    """
-        )
-        st.markdown(f"**Blue Match:** {'✅' if blue_same else '❌'} | **Red Match:** {'✅' if red_same else '❌'} | **Blue & Red Different:** {'✅' if diff_check else '❌'}")
+        if practiceMatch and len(blue_practice_teams) == 3 and len(red_practice_teams) == 3:
+            ref = db.collection("matches").document("8020").collection("2026_Midwest")
+            submit_p = {}
+            status_p = {}
+            shift_p = {}
+            
+            for teamNumber in blue_practice_teams:
+                # Assuming practice matches are stored with 'Practice_' prefix
+                doc = ref.document(f"Practice_{practiceMatch}_{teamNumber}").get()
+                submit_p[teamNumber] = doc.exists
+                status_p[teamNumber] = check_valid_score(doc)
+                data = doc.to_dict() if doc.exists else None
+                res_data = data.get("result", {}) if data else {}
+                shift_p[teamNumber] = res_data.get("shift1Active")
+                
+            for teamNumber in red_practice_teams:
+                doc = ref.document(f"Practice_{practiceMatch}_{teamNumber}").get()
+                submit_p[teamNumber] = doc.exists
+                status_p[teamNumber] = check_valid_score(doc)
+                data = doc.to_dict() if doc.exists else None
+                res_data = data.get("result", {}) if data else {}
+                shift_p[teamNumber] = res_data.get("shift1Active")
+                
+            blue_shifts_p = [shift_p[t] for t in blue_practice_teams if shift_p[t] is not None]
+            red_shifts_p = [shift_p[t] for t in red_practice_teams if shift_p[t] is not None]
+            
+            blue_same_p = (len(set(blue_shifts_p)) == 1 and len(blue_shifts_p) == 3)
+            blue_val_p = blue_shifts_p[0] if blue_same_p else None
+            
+            red_same_p = (len(set(red_shifts_p)) == 1 and len(red_shifts_p) == 3)
+            red_val_p = red_shifts_p[0] if red_same_p else None
+            
+            diff_check_p = (blue_same_p and red_same_p and blue_val_p != red_val_p)
+            
+            st.markdown(f"### Practice Match {practiceMatch}")
+            st.markdown(
+                f"""
+                        | | Blue 1 | Blue 2 | Blue 3 || Red 1 | Red 2 | Red 3 |
+                        | --- | --- | --- | --- | --- | --- | --- | --- |
+                        | Team| {blue_practice_teams[0]} | {blue_practice_teams[1]} | {blue_practice_teams[2]} | | {red_practice_teams[0]} | {red_practice_teams[1]} | {red_practice_teams[2]} |
+                        | Submit| {'✅' if submit_p[blue_practice_teams[0]] else '❌'}|{'✅' if submit_p[blue_practice_teams[1]] else '❌'}|{'✅' if submit_p[blue_practice_teams[2]] else '❌'}| |{'✅' if submit_p[red_practice_teams[0]] else '❌'}|{'✅' if submit_p[red_practice_teams[1]] else '❌'}|{'✅' if submit_p[red_practice_teams[2]] else '❌'}|
+                        | Valid | {'✅' if status_p[blue_practice_teams[0]] else '❌'}|{'✅' if status_p[blue_practice_teams[1]] else '❌'}|{'✅' if status_p[blue_practice_teams[2]] else '❌'}| |{'✅' if status_p[red_practice_teams[0]] else '❌'}|{'✅' if status_p[red_practice_teams[1]] else '❌'}|{'✅' if status_p[red_practice_teams[2]] else '❌'}|
+                        """
+            )
+            st.markdown(f"**Blue Match:** {'✅' if blue_same_p else '❌'} | **Red Match:** {'✅' if red_same_p else '❌'} | **Blue & Red Different:** {'✅' if diff_check_p else '❌'}")
 
 else:
     st.warning("Invalid User Name or Serial Code")
