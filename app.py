@@ -72,7 +72,7 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
     tba_api_key = st.secrets["tba"]["API"]
 
     # Construct the API URL
-    api_url = f"https://www.thebluealliance.com/api/v3/event/2026ilpe/matches"
+    api_url = f"https://www.thebluealliance.com/api/v3/event/2026ilch/matches"
     headers = {"X-TBA-Auth-Key": tba_api_key}
 
     # get match results from TBA
@@ -143,7 +143,7 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
     selectMatch = st.selectbox("Select Match Number: ", matchNumbers)
     if selectMatch:
         match = matches[selectMatch - 1]
-        ref = db.collection("matches").document("8020").collection("2026_Central_Illinois")
+        ref = db.collection("matches").document("8020").collection("2026_Midwest")
         submit = {}
         status = {}  # {'0000:true,9999:false},...
         shift = {}
