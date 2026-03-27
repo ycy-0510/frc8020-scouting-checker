@@ -160,15 +160,20 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
         response = requests.get(api_url, headers=headers)
         response.raise_for_status()  # Raise an exception for bad status codes
 
-        matches = response.json()
-        # sort match by mac number
+        # Filter for qualification matches only
+        matches = [m for m in response.json() if m["comp_level"] == "qm"]
+        # Sort matches by match number
         matches.sort(key=lambda x: x["match_number"])
-        # Parse the response and extract the relevant information
-        matchNumbers = [match["match_number"] for match in matches]
-        selectMatch = st.selectbox("Select Match Number: ", matchNumbers)
+        
+        # Create a mapping from match number to match object for robust selection
+        match_map = {m["match_number"]: m for m in matches}
+        match_numbers = sorted(match_map.keys())
+        
+        selectMatch = st.selectbox("Select Match Number: ", match_numbers)
+        
         if selectMatch:
-            match = matches[selectMatch - 1]
-            ref = db.collection("matches").document("8020").collection("2026_Central_Illinois")
+            match = match_map[selectMatch]
+            ref = db.collection("matches").document("8020").collection("2026_Midwest")
             submit = {}
             status = {}  # {'0000:true,9999:false},...
             shift = {}
