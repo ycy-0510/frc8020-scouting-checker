@@ -286,11 +286,6 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
                 red_end_total += end_f
                 red_total += auto_f + trans_f + sum(shifts_f) + end_f
 
-            if tba_blue_score is not None and tba_red_score is not None:
-                blue_error, red_error = blue_total - tba_blue_score, red_total - tba_red_score
-            else:
-                blue_error, red_error = 0, 0
-
             # TBA detailed counts from hubScore
             hub_blue = match.get("score_breakdown", {}).get("blue", {}).get("hubScore", {}) if match.get("score_breakdown") else {}
             hub_red  = match.get("score_breakdown", {}).get("red",  {}).get("hubScore", {}) if match.get("score_breakdown") else {}
@@ -302,6 +297,12 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
             tba_red_shifts  = [hub_red.get(f"shift{i+1}Count",  0) for i in range(4)]
             tba_blue_end   = hub_blue.get("endgameCount", 0)
             tba_red_end    = hub_red.get("endgameCount", 0)
+            tba_blue_total_count = hub_blue.get("totalCount", 0)
+            tba_red_total_count  = hub_red.get("totalCount", 0)
+            
+            blue_error = blue_total - tba_blue_total_count
+            red_error  = red_total  - tba_red_total_count
+            
             blue_shift_errors = [blue_shift_totals[i] - tba_blue_shifts[i] for i in range(4)]
             red_shift_errors  = [red_shift_totals[i]  - tba_red_shifts[i]  for i in range(4)]
                 
@@ -346,7 +347,7 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
 | Shift 3 | {blue_shift_totals[2]} | {tba_blue_shifts[2]} | {err_str(blue_shift_errors[2])} | | {red_shift_totals[2]} | {tba_red_shifts[2]} | {err_str(red_shift_errors[2])} |
 | Shift 4 | {blue_shift_totals[3]} | {tba_blue_shifts[3]} | {err_str(blue_shift_errors[3])} | | {red_shift_totals[3]} | {tba_red_shifts[3]} | {err_str(red_shift_errors[3])} |
 | Endgame | {blue_end_total} | {tba_blue_end} | {err_str(blue_end_total - tba_blue_end)} | | {red_end_total} | {tba_red_end} | {err_str(red_end_total - tba_red_end)} |
-| **Total** | **{blue_total}** | **{tba_blue_score if tba_blue_score is not None else 'N/A'}** | ** {err_str(blue_error)}** | | **{red_total}** | **{tba_red_score if tba_red_score is not None else 'N/A'}** | ** {err_str(red_error)}** |
+| **Total** | **{blue_total}** | **{tba_blue_total_count}** | **{err_str(blue_error)}** | | **{red_total}** | **{tba_red_total_count}** | **{err_str(red_error)}** |
 """
             )
 
