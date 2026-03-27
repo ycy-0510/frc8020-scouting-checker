@@ -74,7 +74,7 @@ def check_team_score(doc):
         
         return ret
     except Exception:
-        return False
+        return 0
 
 if not firebase_admin._apps:
     firebase_json = st.secrets["firebase"]["json_credentials"]
