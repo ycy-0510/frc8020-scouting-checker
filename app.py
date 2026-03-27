@@ -335,22 +335,18 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
             st.markdown("#### Score Error Breakdown")
             def err_str(e):
                 return f"+{e}" if e > 0 else str(e)
-            def err_color(err, tba_val):
-                if tba_val == 0:
-                    return "⚪" if err == 0 else "🔴"
-                return "🔴" if abs(err / tba_val) > 0.2 else "🟢"
             st.markdown(
                 f"""
 | | Blue Scouted | Blue TBA | Blue Error | | Red Scouted | Red TBA | Red Error |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Auto | {blue_auto_total} | {tba_blue_auto} | {err_color(blue_auto_total - tba_blue_auto, tba_blue_auto)} {err_str(blue_auto_total - tba_blue_auto)} | | {red_auto_total} | {tba_red_auto} | {err_color(red_auto_total - tba_red_auto, tba_red_auto)} {err_str(red_auto_total - tba_red_auto)} |
-| Transition | {blue_trans_total} | {tba_blue_trans} | {err_color(blue_trans_total - tba_blue_trans, tba_blue_trans)} {err_str(blue_trans_total - tba_blue_trans)} | | {red_trans_total} | {tba_red_trans} | {err_color(red_trans_total - tba_red_trans, tba_red_trans)} {err_str(red_trans_total - tba_red_trans)} |
-| Shift 1 | {blue_shift_totals[0]} | {tba_blue_shifts[0]} | {err_color(blue_shift_errors[0], tba_blue_shifts[0])} {err_str(blue_shift_errors[0])} | | {red_shift_totals[0]} | {tba_red_shifts[0]} | {err_color(red_shift_errors[0], tba_red_shifts[0])} {err_str(red_shift_errors[0])} |
-| Shift 2 | {blue_shift_totals[1]} | {tba_blue_shifts[1]} | {err_color(blue_shift_errors[1], tba_blue_shifts[1])} {err_str(blue_shift_errors[1])} | | {red_shift_totals[1]} | {tba_red_shifts[1]} | {err_color(red_shift_errors[1], tba_red_shifts[1])} {err_str(red_shift_errors[1])} |
-| Shift 3 | {blue_shift_totals[2]} | {tba_blue_shifts[2]} | {err_color(blue_shift_errors[2], tba_blue_shifts[2])} {err_str(blue_shift_errors[2])} | | {red_shift_totals[2]} | {tba_red_shifts[2]} | {err_color(red_shift_errors[2], tba_red_shifts[2])} {err_str(red_shift_errors[2])} |
-| Shift 4 | {blue_shift_totals[3]} | {tba_blue_shifts[3]} | {err_color(blue_shift_errors[3], tba_blue_shifts[3])} {err_str(blue_shift_errors[3])} | | {red_shift_totals[3]} | {tba_red_shifts[3]} | {err_color(red_shift_errors[3], tba_red_shifts[3])} {err_str(red_shift_errors[3])} |
-| Endgame | {blue_end_total} | {tba_blue_end} | {err_color(blue_end_total - tba_blue_end, tba_blue_end)} {err_str(blue_end_total - tba_blue_end)} | | {red_end_total} | {tba_red_end} | {err_color(red_end_total - tba_red_end, tba_red_end)} {err_str(red_end_total - tba_red_end)} |
-| **Total** | **{blue_total}** | **{tba_blue_score if tba_blue_score is not None else 'N/A'}** | **{err_color(blue_error, tba_blue_score or 0)} {err_str(blue_error)}** | | **{red_total}** | **{tba_red_score if tba_red_score is not None else 'N/A'}** | **{err_color(red_error, tba_red_score or 0)} {err_str(red_error)}** |
+| Auto | {blue_auto_total} | {tba_blue_auto} | {err_str(blue_auto_total - tba_blue_auto)} | | {red_auto_total} | {tba_red_auto} | {err_str(red_auto_total - tba_red_auto)} |
+| Transition | {blue_trans_total} | {tba_blue_trans} | {err_str(blue_trans_total - tba_blue_trans)} | | {red_trans_total} | {tba_red_trans} | {err_str(red_trans_total - tba_red_trans)} |
+| Shift 1 | {blue_shift_totals[0]} | {tba_blue_shifts[0]} | {err_str(blue_shift_errors[0])} | | {red_shift_totals[0]} | {tba_red_shifts[0]} | {err_str(red_shift_errors[0])} |
+| Shift 2 | {blue_shift_totals[1]} | {tba_blue_shifts[1]} | {err_str(blue_shift_errors[1])} | | {red_shift_totals[1]} | {tba_red_shifts[1]} | {err_str(red_shift_errors[1])} |
+| Shift 3 | {blue_shift_totals[2]} | {tba_blue_shifts[2]} | {err_str(blue_shift_errors[2])} | | {red_shift_totals[2]} | {tba_red_shifts[2]} | {err_str(red_shift_errors[2])} |
+| Shift 4 | {blue_shift_totals[3]} | {tba_blue_shifts[3]} | {err_str(blue_shift_errors[3])} | | {red_shift_totals[3]} | {tba_red_shifts[3]} | {err_str(red_shift_errors[3])} |
+| Endgame | {blue_end_total} | {tba_blue_end} | {err_str(blue_end_total - tba_blue_end)} | | {red_end_total} | {tba_red_end} | {err_str(red_end_total - tba_red_end)} |
+| **Total** | **{blue_total}** | **{tba_blue_score if tba_blue_score is not None else 'N/A'}** | ** {err_str(blue_error)}** | | **{red_total}** | **{tba_red_score if tba_red_score is not None else 'N/A'}** | ** {err_str(red_error)}** |
 """
             )
 
