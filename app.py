@@ -56,7 +56,7 @@ def check_valid_score(doc):
 # add check total
 def check_team_score(doc):
     if not doc.exists:
-        return False
+        return 0
     data = doc.to_dict() or {}
     ret = 0
     try:
@@ -64,9 +64,9 @@ def check_team_score(doc):
         ret += auto.get("fuels", 0)
         
         teleop = data.get("teleop", {})
-        ret += teleop.get("transitionfuels")
+        ret += teleop.get("transitionfuels", 0)
         
-        for f, s in zip(teleop.get("shiftsfuels", []), teleop.get("score", [])):
+        for f in teleop.get("shiftsfuels", []):
             ret += f
             
         endgame = data.get("endgame", {})
@@ -75,6 +75,37 @@ def check_team_score(doc):
         return ret
     except Exception:
         return 0
+
+
+def get_team_shift_fuels(doc):
+    """Returns a list of per-shift fuel counts [shift1, shift2, shift3, shift4]."""
+    if not doc.exists:
+        return [0, 0, 0, 0]
+    data = doc.to_dict() or {}
+    try:
+        teleop = data.get("teleop", {})
+        fuels = teleop.get("shiftsfuels", [])
+        result = [fuels[i] if i < len(fuels) else 0 for i in range(4)]
+        return result
+    except Exception:
+        return [0, 0, 0, 0]
+
+
+def get_team_breakdown(doc):
+    """Returns (auto, transition, shifts[4], endgame) fuel counts."""
+    if not doc.exists:
+        return 0, 0, [0, 0, 0, 0], 0
+    data = doc.to_dict() or {}
+    try:
+        auto_f = data.get("auto", {}).get("fuels", 0)
+        teleop = data.get("teleop", {})
+        trans_f = teleop.get("transitionfuels", 0)
+        raw = teleop.get("shiftsfuels", [])
+        shifts_f = [raw[i] if i < len(raw) else 0 for i in range(4)]
+        end_f = data.get("endgame", {}).get("endfuels", 0)
+        return auto_f, trans_f, shifts_f, end_f
+    except Exception:
+        return 0, 0, [0, 0, 0, 0], 0
 
 if not firebase_admin._apps:
     firebase_json = st.secrets["firebase"]["json_credentials"]
@@ -189,9 +220,17 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
             tba_blue_score = match.get("score_breakdown", {}).get("blue", {}).get("totalPoints") if match.get("score_breakdown") else None
             tba_red_score = match.get("score_breakdown", {}).get("red", {}).get("totalPoints") if match.get("score_breakdown") else None
 
-            # total score
+            # total score and detailed scouted counts
             blue_total = 0
             red_total = 0
+            blue_auto_total = 0
+            red_auto_total = 0
+            blue_trans_total = 0
+            red_trans_total = 0
+            blue_shift_totals = [0, 0, 0, 0]
+            red_shift_totals = [0, 0, 0, 0]
+            blue_end_total = 0
+            red_end_total = 0
 
             for team in blue_teams:
                 teamNumber = team.replace("frc", "")
@@ -211,8 +250,14 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
                 scouted_score = res_data.get("totalScore")
                 score_match[team] = (scouted_score == tba_blue_score) if tba_blue_score is not None and scouted_score is not None else None
 
-                # Total Score
-                blue_total += check_team_score(doc)
+                # Total Score & detailed breakdown
+                auto_f, trans_f, shifts_f, end_f = get_team_breakdown(doc)
+                blue_auto_total += auto_f
+                blue_trans_total += trans_f
+                for i, v in enumerate(shifts_f):
+                    blue_shift_totals[i] += v
+                blue_end_total += end_f
+                blue_total += auto_f + trans_f + sum(shifts_f) + end_f
 
             for team in red_teams:
                 teamNumber = team.replace("frc", "")
@@ -232,13 +277,33 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
                 scouted_score = res_data.get("totalScore")
                 score_match[team] = (scouted_score == tba_red_score) if tba_red_score is not None and scouted_score is not None else None
 
-                # Total Score
-                red_total += check_team_score(doc)                
+                # Total Score & detailed breakdown
+                auto_f, trans_f, shifts_f, end_f = get_team_breakdown(doc)
+                red_auto_total += auto_f
+                red_trans_total += trans_f
+                for i, v in enumerate(shifts_f):
+                    red_shift_totals[i] += v
+                red_end_total += end_f
+                red_total += auto_f + trans_f + sum(shifts_f) + end_f
 
-            if tba_blue_score != None and tba_red_score != None:
+            if tba_blue_score is not None and tba_red_score is not None:
                 blue_error, red_error = blue_total - tba_blue_score, red_total - tba_red_score
             else:
                 blue_error, red_error = 0, 0
+
+            # TBA detailed counts from hubScore
+            hub_blue = match.get("score_breakdown", {}).get("blue", {}).get("hubScore", {}) if match.get("score_breakdown") else {}
+            hub_red  = match.get("score_breakdown", {}).get("red",  {}).get("hubScore", {}) if match.get("score_breakdown") else {}
+            tba_blue_auto  = hub_blue.get("autoCount", 0)
+            tba_red_auto   = hub_red.get("autoCount", 0)
+            tba_blue_trans = hub_blue.get("transitionCount", 0)
+            tba_red_trans  = hub_red.get("transitionCount", 0)
+            tba_blue_shifts = [hub_blue.get(f"shift{i+1}Count", 0) for i in range(4)]
+            tba_red_shifts  = [hub_red.get(f"shift{i+1}Count",  0) for i in range(4)]
+            tba_blue_end   = hub_blue.get("endgameCount", 0)
+            tba_red_end    = hub_red.get("endgameCount", 0)
+            blue_shift_errors = [blue_shift_totals[i] - tba_blue_shifts[i] for i in range(4)]
+            red_shift_errors  = [red_shift_totals[i]  - tba_red_shifts[i]  for i in range(4)]
                 
             blue_shifts = [shift[t] for t in blue_teams if shift[t] is not None]
             red_shifts = [shift[t] for t in red_teams if shift[t] is not None]
@@ -264,7 +329,30 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
                         | Score | {'✅' if score_match[blue_teams[0]] else '❌'}|{'✅' if score_match[blue_teams[1]] else '❌'}|{'✅' if score_match[blue_teams[2]] else '❌'}| |{'✅' if score_match[red_teams[0]] else '❌'}|{'✅' if score_match[red_teams[1]] else '❌'}|{'✅' if score_match[red_teams[2]] else '❌'}|
                         """
             )
-            st.markdown(f"**Blue Match:** {'✅' if blue_same else '❌'} | **Red Match:** {'✅' if red_same else '❌'} | **Blue & Red Different:** {'✅' if diff_check else '❌'} | **Blue Error:** {blue_error} | **Red Error:** {red_error}")
+            st.markdown(f"**Blue Match:** {'✅' if blue_same else '❌'} | **Red Match:** {'✅' if red_same else '❌'} | **Blue & Red Different:** {'✅' if diff_check else '❌'}")
+
+            # Detailed score error breakdown table
+            st.markdown("#### Score Error Breakdown")
+            def err_str(e):
+                return f"+{e}" if e > 0 else str(e)
+            def err_color(err, tba_val):
+                if tba_val == 0:
+                    return "⚪" if err == 0 else "🔴"
+                return "🔴" if abs(err / tba_val) > 0.2 else "🟢"
+            st.markdown(
+                f"""
+| | Blue Scouted | Blue TBA | Blue Error | | Red Scouted | Red TBA | Red Error |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Auto | {blue_auto_total} | {tba_blue_auto} | {err_color(blue_auto_total - tba_blue_auto, tba_blue_auto)} {err_str(blue_auto_total - tba_blue_auto)} | | {red_auto_total} | {tba_red_auto} | {err_color(red_auto_total - tba_red_auto, tba_red_auto)} {err_str(red_auto_total - tba_red_auto)} |
+| Transition | {blue_trans_total} | {tba_blue_trans} | {err_color(blue_trans_total - tba_blue_trans, tba_blue_trans)} {err_str(blue_trans_total - tba_blue_trans)} | | {red_trans_total} | {tba_red_trans} | {err_color(red_trans_total - tba_red_trans, tba_red_trans)} {err_str(red_trans_total - tba_red_trans)} |
+| Shift 1 | {blue_shift_totals[0]} | {tba_blue_shifts[0]} | {err_color(blue_shift_errors[0], tba_blue_shifts[0])} {err_str(blue_shift_errors[0])} | | {red_shift_totals[0]} | {tba_red_shifts[0]} | {err_color(red_shift_errors[0], tba_red_shifts[0])} {err_str(red_shift_errors[0])} |
+| Shift 2 | {blue_shift_totals[1]} | {tba_blue_shifts[1]} | {err_color(blue_shift_errors[1], tba_blue_shifts[1])} {err_str(blue_shift_errors[1])} | | {red_shift_totals[1]} | {tba_red_shifts[1]} | {err_color(red_shift_errors[1], tba_red_shifts[1])} {err_str(red_shift_errors[1])} |
+| Shift 3 | {blue_shift_totals[2]} | {tba_blue_shifts[2]} | {err_color(blue_shift_errors[2], tba_blue_shifts[2])} {err_str(blue_shift_errors[2])} | | {red_shift_totals[2]} | {tba_red_shifts[2]} | {err_color(red_shift_errors[2], tba_red_shifts[2])} {err_str(red_shift_errors[2])} |
+| Shift 4 | {blue_shift_totals[3]} | {tba_blue_shifts[3]} | {err_color(blue_shift_errors[3], tba_blue_shifts[3])} {err_str(blue_shift_errors[3])} | | {red_shift_totals[3]} | {tba_red_shifts[3]} | {err_color(red_shift_errors[3], tba_red_shifts[3])} {err_str(red_shift_errors[3])} |
+| Endgame | {blue_end_total} | {tba_blue_end} | {err_color(blue_end_total - tba_blue_end, tba_blue_end)} {err_str(blue_end_total - tba_blue_end)} | | {red_end_total} | {tba_red_end} | {err_color(red_end_total - tba_red_end, tba_red_end)} {err_str(red_end_total - tba_red_end)} |
+| **Total** | **{blue_total}** | **{tba_blue_score if tba_blue_score is not None else 'N/A'}** | **{err_color(blue_error, tba_blue_score or 0)} {err_str(blue_error)}** | | **{red_total}** | **{tba_red_score if tba_red_score is not None else 'N/A'}** | **{err_color(red_error, tba_red_score or 0)} {err_str(red_error)}** |
+"""
+            )
 
     with tab2:
         practiceMatch = st.number_input("Practice Match Number: ", min_value=1, step=1)
