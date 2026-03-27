@@ -53,6 +53,28 @@ def check_valid_score(doc):
     except Exception:
         return False
 
+# add check total
+def check_team_score(doc):
+    if not doc.exists:
+        return False
+    data = doc.to_dict() or {}
+    ret = 0
+    try:
+        auto = data.get("auto", {})
+        ret += auto.get("fuels", 0)
+        
+        teleop = data.get("teleop", {})
+        ret += teleop.get("transitionfuels")
+        
+        for f, s in zip(teleop.get("shiftsfuels", []), teleop.get("score", [])):
+            ret += f
+            
+        endgame = data.get("endgame", {})
+        ret += endgame.get("endfuels", 0)
+        
+        return ret
+    except Exception:
+        return False
 
 if not firebase_admin._apps:
     firebase_json = st.secrets["firebase"]["json_credentials"]
@@ -162,6 +184,10 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
             tba_blue_score = match.get("score_breakdown", {}).get("blue", {}).get("totalPoints") if match.get("score_breakdown") else None
             tba_red_score = match.get("score_breakdown", {}).get("red", {}).get("totalPoints") if match.get("score_breakdown") else None
 
+            # total score
+            blue_total = 0
+            red_total = 0
+
             for team in blue_teams:
                 teamNumber = team.replace("frc", "")
                 # check if score bool matches fuels >= 5
@@ -180,6 +206,9 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
                 scouted_score = res_data.get("totalScore")
                 score_match[team] = (scouted_score == tba_blue_score) if tba_blue_score is not None and scouted_score is not None else None
 
+                # Total Score
+                blue_total += check_team_score(doc)
+
             for team in red_teams:
                 teamNumber = team.replace("frc", "")
                 # check if score bool matches fuels >= 5
@@ -197,6 +226,12 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
                 # Check Score
                 scouted_score = res_data.get("totalScore")
                 score_match[team] = (scouted_score == tba_red_score) if tba_red_score is not None and scouted_score is not None else None
+
+                # Total Score
+                red_total += check_team_score(doc)
+                
+            blue_error = blue_total - tba_blue_score
+            red_error = red_total - tba_blue_score
                 
             blue_shifts = [shift[t] for t in blue_teams if shift[t] is not None]
             red_shifts = [shift[t] for t in red_teams if shift[t] is not None]
@@ -222,7 +257,7 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
                         | Score | {'✅' if score_match[blue_teams[0]] else '❌'}|{'✅' if score_match[blue_teams[1]] else '❌'}|{'✅' if score_match[blue_teams[2]] else '❌'}| |{'✅' if score_match[red_teams[0]] else '❌'}|{'✅' if score_match[red_teams[1]] else '❌'}|{'✅' if score_match[red_teams[2]] else '❌'}|
                         """
             )
-            st.markdown(f"**Blue Match:** {'✅' if blue_same else '❌'} | **Red Match:** {'✅' if red_same else '❌'} | **Blue & Red Different:** {'✅' if diff_check else '❌'}")
+            st.markdown(f"**Blue Match:** {'✅' if blue_same else '❌'} | **Red Match:** {'✅' if red_same else '❌'} | **Blue & Red Different:** {'✅' if diff_check else '❌'} | **Blue Error:** {blue_error} | **Red Error:** {red_error}")
 
     with tab2:
         practiceMatch = st.number_input("Practice Match Number: ", min_value=1, step=1)
