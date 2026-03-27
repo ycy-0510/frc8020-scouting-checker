@@ -168,7 +168,7 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
         selectMatch = st.selectbox("Select Match Number: ", matchNumbers)
         if selectMatch:
             match = matches[selectMatch - 1]
-            ref = db.collection("matches").document("8020").collection("2026_Midwest")
+            ref = db.collection("matches").document("8020").collection("2026_Central_Illinois")
             submit = {}
             status = {}  # {'0000:true,9999:false},...
             shift = {}
@@ -228,10 +228,12 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
                 score_match[team] = (scouted_score == tba_red_score) if tba_red_score is not None and scouted_score is not None else None
 
                 # Total Score
-                red_total += check_team_score(doc)
-                
-            blue_error = blue_total - tba_blue_score
-            red_error = red_total - tba_blue_score
+                red_total += check_team_score(doc)                
+
+            if tba_blue_score != None and tba_red_score != None:
+                blue_error, red_error = blue_total - tba_blue_score, red_total - tba_red_score
+            else:
+                blue_error, red_error = 0, 0
                 
             blue_shifts = [shift[t] for t in blue_teams if shift[t] is not None]
             red_shifts = [shift[t] for t in red_teams if shift[t] is not None]
@@ -281,6 +283,9 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
             status_p = {}
             shift_p = {}
             
+            blue_total = 0
+            red_total = 0
+
             for teamNumber in blue_practice_teams:
                 # Assuming practice matches are stored with 'Practice_' prefix
                 doc = ref.document(f"Practice_{practiceMatch}_{teamNumber}").get()
@@ -289,6 +294,9 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
                 data = doc.to_dict() if doc.exists else None
                 res_data = data.get("result", {}) if data else {}
                 shift_p[teamNumber] = res_data.get("shift1Active")
+                # Total Score
+                blue_total += check_team_score(doc)              
+                blue_scouted_score = res_data.get("totalScore")  
                 
             for teamNumber in red_practice_teams:
                 doc = ref.document(f"Practice_{practiceMatch}_{teamNumber}").get()
@@ -297,6 +305,11 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
                 data = doc.to_dict() if doc.exists else None
                 res_data = data.get("result", {}) if data else {}
                 shift_p[teamNumber] = res_data.get("shift1Active")
+                # Total Score
+                red_total += check_team_score(doc)            
+                red_scouted_score = res_data.get("totalScore")    
+                
+            blue_error, red_error = blue_total - blue_scouted_score, red_total - red_scouted_score
                 
             blue_shifts_p = [shift_p[t] for t in blue_practice_teams if shift_p[t] is not None]
             red_shifts_p = [shift_p[t] for t in red_practice_teams if shift_p[t] is not None]
@@ -319,7 +332,7 @@ if user in st.secrets["serial"] and serialCode == st.secrets["serial"][user]:
                         | Valid | {'✅' if status_p[blue_practice_teams[0]] else '❌'}|{'✅' if status_p[blue_practice_teams[1]] else '❌'}|{'✅' if status_p[blue_practice_teams[2]] else '❌'}| |{'✅' if status_p[red_practice_teams[0]] else '❌'}|{'✅' if status_p[red_practice_teams[1]] else '❌'}|{'✅' if status_p[red_practice_teams[2]] else '❌'}|
                         """
             )
-            st.markdown(f"**Blue Match:** {'✅' if blue_same_p else '❌'} | **Red Match:** {'✅' if red_same_p else '❌'} | **Blue & Red Different:** {'✅' if diff_check_p else '❌'}")
+            st.markdown(f"**Blue Match:** {'✅' if blue_same_p else '❌'} | **Red Match:** {'✅' if red_same_p else '❌'} | **Blue & Red Different:** {'✅' if diff_check_p else '❌'} | **Blue Error:** {blue_error} | **Red Error:** {red_error}")
 
 else:
     st.warning("Invalid User Name or Serial Code")
